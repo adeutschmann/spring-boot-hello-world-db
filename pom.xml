@@ -10,7 +10,7 @@
     </parent>
     <groupId>com.example</groupId>
     <artifactId>spring-boot-hello-world-db</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
+    <version>0.0.3-SNAPSHOT</version>
     <name>spring-boot-hello-world-db</name>
     <description>Spring Boot Hello World application with PostgreSQL</description>
     <properties>
