@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  spring-boot-hello-world-db:
+    image: postgres:17-alpine
+    container_name: hellodb-postgres
+    environment:
+      POSTGRES_DB: hellodb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  spring-app:
+    build:
+      context: ..
+      dockerfile: Containerfile
+    container_name: spring-boot-hello-world-db
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/hellodb
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=password
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - app-network
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -f http://localhost:8080/actuator/health/liveness || exit 1" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  postgres_data:
+
+networks:
+  app-network:
+    driver: bridge
