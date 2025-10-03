@@ -452,3 +452,124 @@ jobs:
           echo "- **Maven Build**: $(if [ ${{ job.status }} == 'success' ]; then echo '✅ Success'; else echo '❌ Failed'; fi)" >> $GITHUB_STEP_SUMMARY
           echo "- **Nexus Deploy**: $(if [ ${{ job.status }} == 'success' ]; then echo '✅ Deployed'; else echo '❌ Failed'; fi)" >> $GITHUB_STEP_SUMMARY
           echo "- **Git Tag**: v${{ steps.version.outputs.release_version }}" >> $GITHUB_STEP_SUMMARY
+  update-dev-overlay:
+    runs-on: ubuntu-latest
+    needs: build-container        # ← your job that pushed the image
+    if: needs.build-container.result == 'success'
+    steps:
+      - name: Checkout config repo
+        uses: actions/checkout@v4
+        with:
+          repository: adeutschmann-dev/spring-boot-hello-world-gitops
+          token: ${{ secrets.CONFIG_REPO_TOKEN }}   # PAT with repo write perms
+          ref: main
+          path: config-repo
+
+      - name: Install yq
+        run: sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64 && sudo chmod +x /usr/local/bin/yq
+
+      - name: Update image tag in dev overlay
+        env:
+          TAG: ${{ needs.build-container.outputs.image-version || needs.build-container.outputs.tag || steps.version.outputs.release_version }}
+        run: |
+          cd config-repo/environments/dev/hello-world-db
+          yq -i '
+            (.images[] | select(.name == "registry-nexus.apps.ocp4.adeutschmann.dev/spring-boot-helloworld-db")).newTag = env(TAG)
+          ' kustomization.yaml
+
+      - name: Commit & push
+        run: |
+          cd config-repo
+          git config user.name "ci-bot"
+          git config user.email "ci@example.com"
+          git add environments/dev/hello-world/kustomization.yaml
+          git commit -m "Deploy dev: spring-boot-helloworld:${{ env.TAG }}"
+          git push
+  build-and-deploy-migrations:
+    runs-on: ubuntu-latest
+    env:
+
+      # ---- config repo settings (where flyway-job.yaml lives) ----
+      CONFIG_REPO: adeutschmann-dev/spring-boot-hello-world-gitops
+      CONFIG_REPO_BRANCH: main
+      CONFIG_REPO_PATH: environments/dev/hello-world-db
+      FLYWAY_JOB_FILE: flyway-job.yaml
+    steps:
+      - name: Checkout migrations repo
+        uses: actions/checkout@v4
+
+      - name: Compute TAG
+        id: version
+        run: |
+          # Prefer a tag; else YYYYmmdd-HHMMSS-<shortsha>
+          if [ -n "${GITHUB_REF_NAME##refs/tags/*}" ]; then
+            TS=$(date -u +%Y%m%d-%H%M%S)
+            echo "tag=${TS}-${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
+          else
+            # when pushing an actual Git tag
+            echo "tag=${GITHUB_REF_NAME##refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Nexus registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      - name: Build & push migrations image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          # Expect a Dockerfile that copies ./sql into the image (see assumption above)
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          provenance: false
+          sbom: false
+
+      - name: Checkout config repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.CONFIG_REPO }}
+          ref: ${{ env.CONFIG_REPO_BRANCH }}
+          token: ${{ secrets.CONFIG_REPO_TOKEN }}
+          path: config-repo
+
+      - name: Install yq
+        run: sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64 && sudo chmod +x /usr/local/bin/yq
+
+      - name: Update flyway-job image tag
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          FILE="config-repo/${CONFIG_REPO_PATH}/${FLYWAY_JOB_FILE}"
+          IMAGE="${REGISTRY}/${IMAGE_NAME}:${TAG}"
+
+          echo "Updating $FILE to image: $IMAGE"
+
+          # Set the image on the first container (name: flyway) in the Job
+          yq -i '
+            .spec.template.spec.containers
+            |= (map( if .name == "flyway" then .image = strenv(IMAGE) else . end ))
+          ' "$FILE"
+
+          # Optional: ensure initContainer (wait-for-db) refers to correct host/DB if you templatized it
+          # yq -i '...optional changes...' "$FILE"
+
+      - name: Commit & push change
+        working-directory: config-repo
+        run: |
+          git config user.name  "ci-bot"
+          git config user.email "ci@example.com"
+          git add "${CONFIG_REPO_PATH}/${FLYWAY_JOB_FILE}"
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git commit -m "migrations: ${REGISTRY}/${IMAGE_NAME}:${{ steps.version.outputs.tag }}"
+          git push
