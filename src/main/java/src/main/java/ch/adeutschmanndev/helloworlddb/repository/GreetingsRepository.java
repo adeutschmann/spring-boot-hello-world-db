@@ -1,6 +1,6 @@
-package ch.adeutschmanndev.helloworld.repository;
+package ch.adeutschmanndev.helloworlddb.repository;
 
-import ch.adeutschmanndev.helloworld.model.entity.Greetings;
+import ch.adeutschmanndev.helloworlddb.model.entity.Greetings;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;

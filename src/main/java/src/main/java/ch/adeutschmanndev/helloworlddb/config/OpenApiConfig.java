@@ -1,4 +1,4 @@
-package ch.adeutschmanndev.helloworld.config;
+package ch.adeutschmanndev.helloworlddb.config;
 
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Contact;

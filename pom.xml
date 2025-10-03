@@ -8,8 +8,8 @@
         <version>3.5.5</version>
         <relativePath/>
     </parent>
-    <groupId>com.example</groupId>
-    <artifactId>spring-boot-hello-world-db</artifactId>
+    <groupId>ch.adeutschmanndev</groupId>
+    <artifactId>helloworlddb</artifactId>
     <version>0.0.3-SNAPSHOT</version>
     <name>spring-boot-hello-world-db</name>
     <description>Spring Boot Hello World application with PostgreSQL</description>

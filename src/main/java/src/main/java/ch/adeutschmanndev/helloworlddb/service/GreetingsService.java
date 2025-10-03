@@ -1,7 +1,7 @@
-package ch.adeutschmanndev.helloworld.service;
+package ch.adeutschmanndev.helloworlddb.service;
 
-import ch.adeutschmanndev.helloworld.model.entity.Greetings;
-import ch.adeutschmanndev.helloworld.repository.GreetingsRepository;
+import ch.adeutschmanndev.helloworlddb.model.entity.Greetings;
+import ch.adeutschmanndev.helloworlddb.repository.GreetingsRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

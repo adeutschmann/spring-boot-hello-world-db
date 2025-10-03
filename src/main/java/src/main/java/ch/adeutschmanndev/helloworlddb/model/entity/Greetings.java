@@ -1,4 +1,4 @@
-package ch.adeutschmanndev.helloworld.model.entity;
+package ch.adeutschmanndev.helloworlddb.model.entity;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;

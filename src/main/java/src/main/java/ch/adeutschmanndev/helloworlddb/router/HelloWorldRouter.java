@@ -1,6 +1,6 @@
-package ch.adeutschmanndev.helloworld.router;
+package ch.adeutschmanndev.helloworlddb.router;
 
-import ch.adeutschmanndev.helloworld.resource.HelloWorldHandler;
+import ch.adeutschmanndev.helloworlddb.resource.HelloWorldHandler;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;

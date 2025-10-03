@@ -14,7 +14,7 @@ permissions:
 env:
   MAVEN_OPTS: '-Xmx1024m'
   REGISTRY: ${{ secrets.NEXUS_DOCKER_REGISTRY }}
-  IMAGE_NAME: spring-boot-helloworld
+  IMAGE_NAME: spring-boot-helloworld-db
 
 jobs:
   build:
@@ -57,7 +57,7 @@ jobs:
       - name: Upload JAR artifact
         uses: actions/upload-artifact@v4
         with:
-          name: spring-boot-helloworld-jar-${{ github.sha }}
+          name: spring-boot-helloworld-db-jar-${{ github.sha }}
           path: target/*.jar
           retention-days: 30
 
@@ -80,7 +80,7 @@ jobs:
       - name: Download JAR artifact
         uses: actions/download-artifact@v4
         with:
-          name: spring-boot-helloworld-jar-${{ github.sha }}
+          name: spring-boot-helloworld-db-jar-${{ github.sha }}
           path: target/
 
       - name: Extract and prepare version (same logic as deploy job)
@@ -103,9 +103,9 @@ jobs:
             echo "⚠️ Maven wrapper failed, trying alternative methods..."
           
             # Method 2: Parse pom.xml directly - extract project version specifically
-            CURRENT_VERSION=$(grep -A 10 '<artifactId>helloworld</artifactId>' pom.xml | grep '<version>' | head -1 | sed 's/.*<version>\(.*\)<\/version>.*/\1/' | xargs)
-            GROUP_ID=$(grep -A 5 '<artifactId>helloworld</artifactId>' pom.xml | grep -B 5 '<version>' | grep '<groupId>' | sed 's/.*<groupId>\(.*\)<\/groupId>.*/\1/' | xargs)
-            ARTIFACT_ID=$(grep '<artifactId>helloworld</artifactId>' pom.xml | sed 's/.*<artifactId>\(.*\)<\/artifactId>.*/\1/' | xargs)
+            CURRENT_VERSION=$(grep -A 10 '<artifactId>helloworlddb</artifactId>' pom.xml | grep '<version>' | head -1 | sed 's/.*<version>\(.*\)<\/version>.*/\1/' | xargs)
+            GROUP_ID=$(grep -A 5 '<artifactId>helloworlddb</artifactId>' pom.xml | grep -B 5 '<version>' | grep '<groupId>' | sed 's/.*<groupId>\(.*\)<\/groupId>.*/\1/' | xargs)
+            ARTIFACT_ID=$(grep '<artifactId>helloworlddb</artifactId>' pom.xml | sed 's/.*<artifactId>\(.*\)<\/artifactId>.*/\1/' | xargs)
             echo "✅ Project info extracted from pom.xml:"
             echo "  GroupId: $GROUP_ID"
             echo "  ArtifactId: $ARTIFACT_ID"
@@ -149,7 +149,7 @@ jobs:
           # Rename the JAR file to use the release version (without SNAPSHOT)
           OLD_JAR=$(find target -name "*.jar" -not -name "*-sources.jar" -not -name "*-javadoc.jar" | head -1)
           if [[ -f "$OLD_JAR" ]]; then
-            NEW_JAR="target/helloworld-${{ steps.version.outputs.release_version }}.jar"
+            NEW_JAR="target/helloworlddb-${{ steps.version.outputs.release_version }}.jar"
             echo "Renaming JAR: $OLD_JAR -> $NEW_JAR"
             mv "$OLD_JAR" "$NEW_JAR"
             echo "✅ JAR renamed to match release version"
@@ -277,7 +277,7 @@ jobs:
       - name: Download JAR artifact
         uses: actions/download-artifact@v4
         with:
-          name: spring-boot-helloworld-jar-${{ github.sha }}
+          name: spring-boot-helloworld-db-jar-${{ github.sha }}
           path: target/
 
       - name: Configure Maven settings for Nexus
@@ -323,9 +323,9 @@ jobs:
             echo "⚠️ Maven wrapper failed, trying alternative methods..."
           
             # Method 2: Parse pom.xml directly - extract project version specifically
-            CURRENT_VERSION=$(grep -A 10 '<artifactId>helloworld</artifactId>' pom.xml | grep '<version>' | head -1 | sed 's/.*<version>\(.*\)<\/version>.*/\1/' | xargs)
-            GROUP_ID=$(grep -A 5 '<artifactId>helloworld</artifactId>' pom.xml | grep -B 5 '<version>' | grep '<groupId>' | sed 's/.*<groupId>\(.*\)<\/groupId>.*/\1/' | xargs)
-            ARTIFACT_ID=$(grep '<artifactId>helloworld</artifactId>' pom.xml | sed 's/.*<artifactId>\(.*\)<\/artifactId>.*/\1/' | xargs)
+            CURRENT_VERSION=$(grep -A 10 '<artifactId>helloworlddb</artifactId>' pom.xml | grep '<version>' | head -1 | sed 's/.*<version>\(.*\)<\/version>.*/\1/' | xargs)
+            GROUP_ID=$(grep -A 5 '<artifactId>helloworlddb</artifactId>' pom.xml | grep -B 5 '<version>' | grep '<groupId>' | sed 's/.*<groupId>\(.*\)<\/groupId>.*/\1/' | xargs)
+            ARTIFACT_ID=$(grep '<artifactId>helloworlddb</artifactId>' pom.xml | sed 's/.*<artifactId>\(.*\)<\/artifactId>.*/\1/' | xargs)
             echo "✅ Project info extracted from pom.xml:"
             echo "  GroupId: $GROUP_ID"
             echo "  ArtifactId: $ARTIFACT_ID"

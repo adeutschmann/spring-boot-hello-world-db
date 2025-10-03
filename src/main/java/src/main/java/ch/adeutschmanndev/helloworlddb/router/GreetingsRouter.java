@@ -1,6 +1,6 @@
-package ch.adeutschmanndev.helloworld.router;
+package ch.adeutschmanndev.helloworlddb.router;
 
-import ch.adeutschmanndev.helloworld.resource.GreetingsHandler;
+import ch.adeutschmanndev.helloworlddb.resource.GreetingsHandler;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
@@ -44,7 +44,7 @@ public class GreetingsRouter {
                                     required = true,
                                     content = @Content(
                                             mediaType = "application/json",
-                                            schema = @Schema(implementation = ch.adeutschmanndev.helloworld.model.dto.CreateGreetingRequestDto.class)
+                                            schema = @Schema(implementation = ch.adeutschmanndev.helloworlddb.model.dto.CreateGreetingRequestDto.class)
                                     )
                             ),
                             responses = {
@@ -53,7 +53,7 @@ public class GreetingsRouter {
                                             description = "Greeting created successfully",
                                             content = @Content(
                                                     mediaType = "application/json",
-                                                    schema = @Schema(implementation = ch.adeutschmanndev.helloworld.model.dto.GreetingResponseDto.class)
+                                                    schema = @Schema(implementation = ch.adeutschmanndev.helloworlddb.model.dto.GreetingResponseDto.class)
                                             )
                                     ),
                                     @ApiResponse(
@@ -61,7 +61,7 @@ public class GreetingsRouter {
                                             description = "Invalid request data",
                                             content = @Content(
                                                     mediaType = "application/json",
-                                                    schema = @Schema(implementation = ch.adeutschmanndev.helloworld.model.dto.ErrorResponseDto.class)
+                                                    schema = @Schema(implementation = ch.adeutschmanndev.helloworlddb.model.dto.ErrorResponseDto.class)
                                             )
                                     )
                             }
@@ -84,7 +84,7 @@ public class GreetingsRouter {
                                             description = "Greeting found",
                                             content = @Content(
                                                     mediaType = "application/json",
-                                                    schema = @Schema(implementation = ch.adeutschmanndev.helloworld.model.dto.GreetingResponseDto.class)
+                                                    schema = @Schema(implementation = ch.adeutschmanndev.helloworlddb.model.dto.GreetingResponseDto.class)
                                             )
                                     ),
                                     @ApiResponse(
@@ -92,7 +92,7 @@ public class GreetingsRouter {
                                             description = "Greeting not found",
                                             content = @Content(
                                                     mediaType = "application/json",
-                                                    schema = @Schema(implementation = ch.adeutschmanndev.helloworld.model.dto.ErrorResponseDto.class)
+                                                    schema = @Schema(implementation = ch.adeutschmanndev.helloworlddb.model.dto.ErrorResponseDto.class)
                                             )
                                     )
                             }
@@ -112,7 +112,7 @@ public class GreetingsRouter {
                                             description = "List of all greetings",
                                             content = @Content(
                                                     mediaType = "application/json",
-                                                    schema = @Schema(type = "array", implementation = ch.adeutschmanndev.helloworld.model.dto.GreetingResponseDto.class)
+                                                    schema = @Schema(type = "array", implementation = ch.adeutschmanndev.helloworlddb.model.dto.GreetingResponseDto.class)
                                             )
                                     )
                             }
@@ -134,7 +134,7 @@ public class GreetingsRouter {
                                     required = true,
                                     content = @Content(
                                             mediaType = "application/json",
-                                            schema = @Schema(implementation = ch.adeutschmanndev.helloworld.model.dto.UpdateGreetingRequestDto.class)
+                                            schema = @Schema(implementation = ch.adeutschmanndev.helloworlddb.model.dto.UpdateGreetingRequestDto.class)
                                     )
                             ),
                             responses = {
@@ -143,7 +143,7 @@ public class GreetingsRouter {
                                             description = "Greeting updated successfully",
                                             content = @Content(
                                                     mediaType = "application/json",
-                                                    schema = @Schema(implementation = ch.adeutschmanndev.helloworld.model.dto.GreetingResponseDto.class)
+                                                    schema = @Schema(implementation = ch.adeutschmanndev.helloworlddb.model.dto.GreetingResponseDto.class)
                                             )
                                     ),
                                     @ApiResponse(
@@ -151,7 +151,7 @@ public class GreetingsRouter {
                                             description = "Greeting not found",
                                             content = @Content(
                                                     mediaType = "application/json",
-                                                    schema = @Schema(implementation = ch.adeutschmanndev.helloworld.model.dto.ErrorResponseDto.class)
+                                                    schema = @Schema(implementation = ch.adeutschmanndev.helloworlddb.model.dto.ErrorResponseDto.class)
                                             )
                                     )
                             }
@@ -175,7 +175,7 @@ public class GreetingsRouter {
                                             description = "Greeting not found",
                                             content = @Content(
                                                     mediaType = "application/json",
-                                                    schema = @Schema(implementation = ch.adeutschmanndev.helloworld.model.dto.ErrorResponseDto.class)
+                                                    schema = @Schema(implementation = ch.adeutschmanndev.helloworlddb.model.dto.ErrorResponseDto.class)
                                             )
                                     )
                             }
@@ -198,7 +198,7 @@ public class GreetingsRouter {
                                             description = "List of greetings from the specified sender",
                                             content = @Content(
                                                     mediaType = "application/json",
-                                                    schema = @Schema(type = "array", implementation = ch.adeutschmanndev.helloworld.model.dto.GreetingResponseDto.class)
+                                                    schema = @Schema(type = "array", implementation = ch.adeutschmanndev.helloworlddb.model.dto.GreetingResponseDto.class)
                                             )
                                     )
                             }
@@ -221,7 +221,7 @@ public class GreetingsRouter {
                                             description = "List of greetings to the specified recipient",
                                             content = @Content(
                                                     mediaType = "application/json",
-                                                    schema = @Schema(type = "array", implementation = ch.adeutschmanndev.helloworld.model.dto.GreetingResponseDto.class)
+                                                    schema = @Schema(type = "array", implementation = ch.adeutschmanndev.helloworlddb.model.dto.GreetingResponseDto.class)
                                             )
                                     )
                             }
@@ -244,7 +244,7 @@ public class GreetingsRouter {
                                             description = "List of greetings matching the search criteria",
                                             content = @Content(
                                                     mediaType = "application/json",
-                                                    schema = @Schema(type = "array", implementation = ch.adeutschmanndev.helloworld.model.dto.GreetingResponseDto.class)
+                                                    schema = @Schema(type = "array", implementation = ch.adeutschmanndev.helloworlddb.model.dto.GreetingResponseDto.class)
                                             )
                                     )
                             }
@@ -268,7 +268,7 @@ public class GreetingsRouter {
                                             description = "List of greetings within the specified date range",
                                             content = @Content(
                                                     mediaType = "application/json",
-                                                    schema = @Schema(type = "array", implementation = ch.adeutschmanndev.helloworld.model.dto.GreetingResponseDto.class)
+                                                    schema = @Schema(type = "array", implementation = ch.adeutschmanndev.helloworlddb.model.dto.GreetingResponseDto.class)
                                             )
                                     )
                             }
@@ -291,7 +291,7 @@ public class GreetingsRouter {
                                             description = "List of greetings created after the specified date",
                                             content = @Content(
                                                     mediaType = "application/json",
-                                                    schema = @Schema(type = "array", implementation = ch.adeutschmanndev.helloworld.model.dto.GreetingResponseDto.class)
+                                                    schema = @Schema(type = "array", implementation = ch.adeutschmanndev.helloworlddb.model.dto.GreetingResponseDto.class)
                                             )
                                     )
                             }
@@ -314,7 +314,7 @@ public class GreetingsRouter {
                                             description = "Latest greeting from the specified sender",
                                             content = @Content(
                                                     mediaType = "application/json",
-                                                    schema = @Schema(implementation = ch.adeutschmanndev.helloworld.model.dto.GreetingResponseDto.class)
+                                                    schema = @Schema(implementation = ch.adeutschmanndev.helloworlddb.model.dto.GreetingResponseDto.class)
                                             )
                                     ),
                                     @ApiResponse(
@@ -322,7 +322,7 @@ public class GreetingsRouter {
                                             description = "No greetings found for the specified sender",
                                             content = @Content(
                                                     mediaType = "application/json",
-                                                    schema = @Schema(implementation = ch.adeutschmanndev.helloworld.model.dto.ErrorResponseDto.class)
+                                                    schema = @Schema(implementation = ch.adeutschmanndev.helloworlddb.model.dto.ErrorResponseDto.class)
                                             )
                                     )
                             }
@@ -359,7 +359,7 @@ public class GreetingsRouter {
                                             description = "Total count of greetings",
                                             content = @Content(
                                                     mediaType = "application/json",
-                                                    schema = @Schema(implementation = ch.adeutschmanndev.helloworld.model.dto.GreetingCountResponseDto.class)
+                                                    schema = @Schema(implementation = ch.adeutschmanndev.helloworlddb.model.dto.GreetingCountResponseDto.class)
                                             )
                                     )
                             }

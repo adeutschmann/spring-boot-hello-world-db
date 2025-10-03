@@ -1,10 +1,10 @@
-package ch.adeutschmanndev.helloworld.converter;
+package ch.adeutschmanndev.helloworlddb.converter;
 
-import ch.adeutschmanndev.helloworld.model.dto.CreateGreetingRequestDto;
-import ch.adeutschmanndev.helloworld.model.dto.GreetingCountResponseDto;
-import ch.adeutschmanndev.helloworld.model.dto.GreetingResponseDto;
-import ch.adeutschmanndev.helloworld.model.dto.UpdateGreetingRequestDto;
-import ch.adeutschmanndev.helloworld.model.entity.Greetings;
+import ch.adeutschmanndev.helloworlddb.model.dto.CreateGreetingRequestDto;
+import ch.adeutschmanndev.helloworlddb.model.dto.GreetingCountResponseDto;
+import ch.adeutschmanndev.helloworlddb.model.dto.GreetingResponseDto;
+import ch.adeutschmanndev.helloworlddb.model.dto.UpdateGreetingRequestDto;
+import ch.adeutschmanndev.helloworlddb.model.entity.Greetings;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
