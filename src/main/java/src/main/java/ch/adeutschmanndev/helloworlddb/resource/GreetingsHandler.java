@@ -1,9 +1,9 @@
-package ch.adeutschmanndev.helloworld.resource;
+package ch.adeutschmanndev.helloworlddb.resource;
 
-import ch.adeutschmanndev.helloworld.converter.GreetingConverter;
-import ch.adeutschmanndev.helloworld.model.dto.*;
-import ch.adeutschmanndev.helloworld.model.entity.Greetings;
-import ch.adeutschmanndev.helloworld.service.GreetingsService;
+import ch.adeutschmanndev.helloworlddb.converter.GreetingConverter;
+import ch.adeutschmanndev.helloworlddb.model.dto.*;
+import ch.adeutschmanndev.helloworlddb.model.entity.Greetings;
+import ch.adeutschmanndev.helloworlddb.service.GreetingsService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;

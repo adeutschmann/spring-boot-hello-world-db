@@ -1,6 +1,6 @@
-package ch.adeutschmanndev.helloworld.resource;
+package ch.adeutschmanndev.helloworlddb.resource;
 
-import ch.adeutschmanndev.helloworld.model.dto.HelloWorldResponse;
+import ch.adeutschmanndev.helloworlddb.model.dto.HelloWorldResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
