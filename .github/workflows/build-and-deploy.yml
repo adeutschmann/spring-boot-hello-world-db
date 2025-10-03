@@ -487,6 +487,8 @@ jobs:
           git push
   build-and-deploy-migrations:
     runs-on: ubuntu-latest
+    needs: update-dev-overlay        # ← your job that pushed the image
+    if: needs.build-container.result == 'success'
     env:
 
       # ---- config repo settings (where flyway-job.yaml lives) ----
