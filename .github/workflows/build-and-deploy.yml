@@ -491,11 +491,11 @@ jobs:
     if: needs.build-container.result == 'success'
     env:
       IMAGE_NAME: helloworld-db-migrations
-      # ---- config repo settings (where flyway-job.yaml lives) ----
+      # ---- config repo settings (where kustomization.yaml lives) ----
       CONFIG_REPO: adeutschmann-dev/spring-boot-hello-world-gitops
       CONFIG_REPO_BRANCH: main
       CONFIG_REPO_PATH: environments/dev/hello-world-db
-      FLYWAY_JOB_FILE: flyway-job.yaml
+      FLYWAY_JOB_FILE: kustomization.yaml
     steps:
       - name: Checkout migrations repo
         uses: actions/checkout@v4
