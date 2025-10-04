@@ -496,6 +496,7 @@ jobs:
       CONFIG_REPO_BRANCH: main
       CONFIG_REPO_PATH: environments/dev/hello-world-db
       FLYWAY_JOB_FILE: kustomization.yaml
+      TAG: ${{ needs.build-container.outputs.image-version || needs.build-container.outputs.tag || steps.version.outputs.release_version }}
     steps:
       - name: Checkout migrations repo
         uses: actions/checkout@v4
@@ -530,7 +531,7 @@ jobs:
           # Expect a Dockerfile that copies ./sql into the image (see assumption above)
           push: true
           tags: |
-            ${{ secrets.NEXUS_DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}
+            ${{ secrets.NEXUS_DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.TAG }}
             ${{ secrets.NEXUS_DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:latest
           provenance: false
           sbom: false
@@ -550,7 +551,7 @@ jobs:
         env:
           FILE: config-repo/environments/dev/hello-world-db/kustomization.yaml
           IMAGE_BASE: registry-nexus.apps.ocp4.adeutschmann.dev/helloworld-db-migrations
-          TAG: ${{ steps.version.outputs.tag }}   # or however you compute TAG
+          TAG: ${{ env.TAG }}   # or however you compute TAG
         run: |
           echo "Updating $IMAGE_BASE to tag $TAG in $FILE"
           yq -i '
