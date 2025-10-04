@@ -483,7 +483,7 @@ jobs:
           git config user.name "ci-bot"
           git config user.email "ci@example.com"
           git add environments/dev/hello-world-db/kustomization.yaml
-          git commit -m "Deploy dev: spring-boot-helloworld:${{ env.TAG }}"
+          git commit -m "Deploy dev: spring-boot-helloworld:${{ needs.build-container.outputs.image-version || needs.build-container.outputs.tag || steps.version.outputs.release_version }}"
           git push
   build-and-deploy-migrations:
     runs-on: ubuntu-latest
