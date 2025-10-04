@@ -490,7 +490,7 @@ jobs:
     needs: update-dev-overlay        # ← your job that pushed the image
     if: needs.build-container.result == 'success'
     env:
-
+      IMAGE_NAME: helloworld-db-migrations
       # ---- config repo settings (where flyway-job.yaml lives) ----
       CONFIG_REPO: adeutschmann-dev/spring-boot-hello-world-gitops
       CONFIG_REPO_BRANCH: main
@@ -518,7 +518,7 @@ jobs:
       - name: Log in to Nexus registry
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ${{ secrets.NEXUS_DOCKER_REGISTRY }}
           username: ${{ secrets.REGISTRY_USERNAME }}
           password: ${{ secrets.REGISTRY_PASSWORD }}
 
@@ -529,8 +529,8 @@ jobs:
           # Expect a Dockerfile that copies ./sql into the image (see assumption above)
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            ${{ secrets.NEXUS_DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}
+            ${{ secrets.NEXUS_DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:latest
           provenance: false
           sbom: false
 
