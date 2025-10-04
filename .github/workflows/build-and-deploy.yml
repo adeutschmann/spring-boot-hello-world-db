@@ -548,21 +548,14 @@ jobs:
 
       - name: Update flyway-job image tag
         env:
-          TAG: ${{ steps.version.outputs.tag }}
+          FILE: config-repo/environments/dev/hello-world-db/kustomization.yaml
+          IMAGE_BASE: registry-nexus.apps.ocp4.adeutschmann.dev/helloworld-db-migrations
+          TAG: ${{ steps.version.outputs.tag }}   # or however you compute TAG
         run: |
-          FILE="config-repo/${CONFIG_REPO_PATH}/${FLYWAY_JOB_FILE}"
-          IMAGE="${REGISTRY}/${IMAGE_NAME}:${TAG}"
-
-          echo "Updating $FILE to image: $IMAGE"
-
-          # Set the image on the first container (name: flyway) in the Job
+          echo "Updating $IMAGE_BASE to tag $TAG in $FILE"
           yq -i '
-            .spec.template.spec.containers
-            |= (map( if .name == "flyway" then .image = strenv(IMAGE) else . end ))
+            (.images[] | select(.name == strenv(IMAGE_BASE)).newTag) = strenv(TAG)
           ' "$FILE"
-
-          # Optional: ensure initContainer (wait-for-db) refers to correct host/DB if you templatized it
-          # yq -i '...optional changes...' "$FILE"
 
       - name: Commit & push change
         working-directory: config-repo
