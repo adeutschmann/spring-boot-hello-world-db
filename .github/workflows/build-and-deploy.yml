@@ -482,7 +482,7 @@ jobs:
           cd config-repo
           git config user.name "ci-bot"
           git config user.email "ci@example.com"
-          git add environments/dev/hello-world/kustomization.yaml
+          git add environments/dev/hello-world-db/kustomization.yaml
           git commit -m "Deploy dev: spring-boot-helloworld:${{ env.TAG }}"
           git push
   build-and-deploy-migrations:
