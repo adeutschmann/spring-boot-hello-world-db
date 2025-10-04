@@ -1,0 +1,12 @@
+# Use official Flyway CLI as base
+FROM flyway/flyway:10
+
+# Set working directory
+WORKDIR /flyway
+
+# Copy your SQL migrations into the Flyway image
+# This assumes your repo layout: src/main/resources/db/migration/
+COPY src/main/resources/db/migration/ ./sql
+
+# Default command (can be overridden in Job manifest)
+CMD ["migrate"]

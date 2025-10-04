@@ -526,6 +526,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
+          file: Dockerfile.flyway
           # Expect a Dockerfile that copies ./sql into the image (see assumption above)
           push: true
           tags: |
