@@ -9,12 +9,13 @@ spring:
     password: ${SPRING_DATASOURCE_PASSWORD}
     driver-class-name: org.postgresql.Driver
     hikari:
-      connection-timeout: 20000
+      connection-timeout: 30000
       idle-timeout: 300000
       max-lifetime: 1200000
       maximum-pool-size: 10
       minimum-idle: 5
       pool-name: HikariPoolHelloWorld
+      initialization-fail-timeout: -1   # don’t fail fast if DB not ready yet
 
   # JPA/Hibernate Configuration
   jpa:
@@ -33,12 +34,12 @@ spring:
     database-platform: ${spring.jpa.properties.hibernate.dialect}
 
   # Flyway Configuration
-  flyway:
-    enabled: true
-    baseline-on-migrate: true
-    locations: classpath:db/migration
-    schemas: ${spring.jpa.properties.hibernate.default_schema}
-    default-schema: ${spring.jpa.properties.hibernate.default_schema}
+    # flyway:
+    # enabled: true
+    # baseline-on-migrate: true
+    # locations: classpath:db/migration
+    # schemas: ${spring.jpa.properties.hibernate.default_schema}
+    # default-schema: ${spring.jpa.properties.hibernate.default_schema}
 
 management:
   endpoints:
