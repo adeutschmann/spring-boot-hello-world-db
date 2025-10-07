@@ -3,12 +3,9 @@ package ch.adeutschmanndev.helloworlddb.config;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Contact;
 import io.swagger.v3.oas.models.info.Info;
-import io.swagger.v3.oas.models.servers.Server;
 import org.springdoc.core.models.GroupedOpenApi;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-
-import java.util.List;
 
 @Configuration
 public class OpenApiConfig {
@@ -23,15 +20,7 @@ public class OpenApiConfig {
                         .contact(new Contact()
                                 .name("API Support")
                                 .email("support@example.com")
-                                .url("https://example.com")))
-                .servers(List.of(
-                        new Server()
-                                .url("http://localhost:8080")
-                                .description("Development server"),
-                        new Server()
-                                .url("https://api.example.com")
-                                .description("Production server")
-                ));
+                                .url("https://example.com")));
     }
 
     @Bean
