@@ -2,9 +2,9 @@ name: Build and Deploy to Nexus
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main ]
   pull_request:
-    branches: [ main, master ]
+    branches: [ main ]
   workflow_dispatch:
 
 permissions:
@@ -14,11 +14,16 @@ permissions:
 env:
   MAVEN_OPTS: '-Xmx1024m'
   REGISTRY: ${{ secrets.NEXUS_DOCKER_REGISTRY }}
-  IMAGE_NAME: spring-boot-helloworld-db
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      java-version: ${{ steps.java-version.outputs.java-version }}
+      group-id: ${{ steps.version.outputs.group_id }}
+      artifact-id: ${{ steps.version.outputs.artifact_id }}
+      current-version: ${{ steps.version.outputs.current_version }}
+      release-version: ${{ steps.version.outputs.release_version }}
 
     steps:
       - name: Checkout code
@@ -30,7 +35,6 @@ jobs:
       - name: Extract Java version from pom.xml
         id: java-version
         run: |
-          # Extract Java version from pom.xml properties
           JAVA_VERSION=$(grep -A 5 '<properties>' pom.xml | grep '<java.version>' | sed 's/.*<java.version>\(.*\)<\/java.version>.*/\1/' | xargs)
           echo "Extracted Java version: $JAVA_VERSION"
           echo "java-version=$JAVA_VERSION" >> $GITHUB_OUTPUT
@@ -48,6 +52,80 @@ jobs:
           key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
           restore-keys: ${{ runner.os }}-m2
 
+      - name: Extract and prepare version information
+        id: version
+        run: |
+          chmod +x ./mvnw
+          
+          echo "Attempting to extract project information from pom.xml..."
+          
+          if CURRENT_VERSION=$(./mvnw help:evaluate -Dexpression=project.version -q -DforceStdout 2>/dev/null) && \
+             GROUP_ID=$(./mvnw help:evaluate -Dexpression=project.groupId -q -DforceStdout 2>/dev/null) && \
+             ARTIFACT_ID=$(./mvnw help:evaluate -Dexpression=project.artifactId -q -DforceStdout 2>/dev/null); then
+            echo "✅ Project info extracted using Maven wrapper:"
+            echo "  GroupId: $GROUP_ID"
+            echo "  ArtifactId: $ARTIFACT_ID" 
+            echo "  Version: $CURRENT_VERSION"
+          else
+            echo "⚠️ Maven wrapper failed, trying alternative methods..."
+            CURRENT_VERSION=$(grep -A 10 '<artifactId>helloworlddb</artifactId>' pom.xml | grep '<version>' | head -1 | sed 's/.*<version>\(.*\)<\/version>.*/\1/' | xargs)
+            GROUP_ID=$(grep -A 5 '<artifactId>helloworlddb</artifactId>' pom.xml | grep -B 5 '<version>' | grep '<groupId>' | sed 's/.*<groupId>\(.*\)<\/groupId>.*/\1/' | xargs)
+            ARTIFACT_ID=$(grep '<artifactId>helloworlddb</artifactId>' pom.xml | sed 's/.*<artifactId>\(.*\)<\/artifactId>.*/\1/' | xargs)
+            echo "✅ Project info extracted from pom.xml:"
+            echo "  GroupId: $GROUP_ID"
+            echo "  ArtifactId: $ARTIFACT_ID"
+            echo "  Version: $CURRENT_VERSION"
+          fi
+          
+          if [[ -z "$GROUP_ID" || -z "$ARTIFACT_ID" ]]; then
+            echo "❌ Failed to extract groupId or artifactId"
+            exit 1
+          fi
+          
+          if [[ ! "$CURRENT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-SNAPSHOT)?$ ]]; then
+            echo "❌ Invalid version format: $CURRENT_VERSION"
+            echo "Setting default version: 0.0.1-SNAPSHOT"
+            CURRENT_VERSION="0.0.1-SNAPSHOT"
+          fi
+          
+          echo "group_id=$GROUP_ID" >> $GITHUB_OUTPUT
+          echo "artifact_id=$ARTIFACT_ID" >> $GITHUB_OUTPUT
+          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          
+          BASE_VERSION=$(echo $CURRENT_VERSION | sed 's/-SNAPSHOT//')
+          echo "base_version=$BASE_VERSION" >> $GITHUB_OUTPUT
+
+          # Get the latest git tag to determine next version
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          LATEST_VERSION=$(echo $LATEST_TAG | sed 's/^v//')
+          
+          echo "Latest git tag: $LATEST_TAG"
+          echo "Latest version: $LATEST_VERSION"
+
+          # Parse latest version
+          if [[ "$LATEST_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            MAJOR=$(echo $LATEST_VERSION | cut -d. -f1)
+            MINOR=$(echo $LATEST_VERSION | cut -d. -f2)
+            PATCH=$(echo $LATEST_VERSION | cut -d. -f3)
+          
+            NEW_PATCH=$((PATCH + 1))
+            RELEASE_VERSION="$MAJOR.$MINOR.$NEW_PATCH"
+          else
+            # If no valid tag exists, use base version from pom.xml
+            MAJOR=$(echo $BASE_VERSION | cut -d. -f1)
+            MINOR=$(echo $BASE_VERSION | cut -d. -f2)
+            PATCH=$(echo $BASE_VERSION | cut -d. -f3)
+            RELEASE_VERSION="$MAJOR.$MINOR.$PATCH"
+          fi
+
+          echo "release_version=$RELEASE_VERSION" >> $GITHUB_OUTPUT
+
+          echo "📋 Project Summary:"
+          echo "  GroupId: $GROUP_ID"
+          echo "  ArtifactId: $ARTIFACT_ID"
+          echo "  Current SNAPSHOT version: $CURRENT_VERSION"
+          echo "  Release version for this build: $RELEASE_VERSION"
+
       - name: Run tests
         run: ./mvnw test
 
@@ -64,11 +142,10 @@ jobs:
   build-container:
     runs-on: ubuntu-latest
     needs: build
-    # Only build containers on merge to main/master (not on PRs)
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     outputs:
       image-digest: ${{ steps.build.outputs.digest }}
-      image-version: ${{ steps.version.outputs.release_version }}
+      image-version: ${{ needs.build.outputs.release-version }}
 
     steps:
       - name: Checkout code
@@ -83,73 +160,11 @@ jobs:
           name: spring-boot-helloworld-db-jar-${{ github.sha }}
           path: target/
 
-      - name: Extract and prepare version (same logic as deploy job)
-        id: version
-        run: |
-          # Make Maven wrapper executable
-          chmod +x ./mvnw
-          
-          # Extract current version using same logic as deploy job
-          echo "Attempting to extract project information from pom.xml..."
-          
-          if CURRENT_VERSION=$(./mvnw help:evaluate -Dexpression=project.version -q -DforceStdout 2>/dev/null) && \
-             GROUP_ID=$(./mvnw help:evaluate -Dexpression=project.groupId -q -DforceStdout 2>/dev/null) && \
-             ARTIFACT_ID=$(./mvnw help:evaluate -Dexpression=project.artifactId -q -DforceStdout 2>/dev/null); then
-            echo "✅ Project info extracted using Maven wrapper:"
-            echo "  GroupId: $GROUP_ID"
-            echo "  ArtifactId: $ARTIFACT_ID" 
-            echo "  Version: $CURRENT_VERSION"
-          else
-            echo "⚠️ Maven wrapper failed, trying alternative methods..."
-          
-            # Method 2: Parse pom.xml directly - extract project version specifically
-            CURRENT_VERSION=$(grep -A 10 '<artifactId>helloworlddb</artifactId>' pom.xml | grep '<version>' | head -1 | sed 's/.*<version>\(.*\)<\/version>.*/\1/' | xargs)
-            GROUP_ID=$(grep -A 5 '<artifactId>helloworlddb</artifactId>' pom.xml | grep -B 5 '<version>' | grep '<groupId>' | sed 's/.*<groupId>\(.*\)<\/groupId>.*/\1/' | xargs)
-            ARTIFACT_ID=$(grep '<artifactId>helloworlddb</artifactId>' pom.xml | sed 's/.*<artifactId>\(.*\)<\/artifactId>.*/\1/' | xargs)
-            echo "✅ Project info extracted from pom.xml:"
-            echo "  GroupId: $GROUP_ID"
-            echo "  ArtifactId: $ARTIFACT_ID"
-            echo "  Version: $CURRENT_VERSION"
-          fi
-          
-          # Validate version format
-          if [[ ! "$CURRENT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-SNAPSHOT)?$ ]]; then
-            echo "❌ Invalid version format: $CURRENT_VERSION"
-            echo "Setting default version: 0.0.1-SNAPSHOT"
-            CURRENT_VERSION="0.0.1-SNAPSHOT"
-          fi
-          
-          # Remove -SNAPSHOT suffix and extract version parts
-          BASE_VERSION=$(echo $CURRENT_VERSION | sed 's/-SNAPSHOT//')
-          echo "base_version=$BASE_VERSION" >> $GITHUB_OUTPUT
-
-          # Extract major, minor, patch
-          MAJOR=$(echo $BASE_VERSION | cut -d. -f1)
-          MINOR=$(echo $BASE_VERSION | cut -d. -f2)
-          PATCH=$(echo $BASE_VERSION | cut -d. -f3)
-
-          # Increment patch version for release
-          NEW_PATCH=$((PATCH + 1))
-          RELEASE_VERSION="$MAJOR.$MINOR.$NEW_PATCH"
-
-          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
-          echo "release_version=$RELEASE_VERSION" >> $GITHUB_OUTPUT
-
-          echo "📋 Container Version Summary:"
-          echo "  Current version: $CURRENT_VERSION"
-          echo "  Release version (for container): $RELEASE_VERSION"
-
-      - name: Set up Podman
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y podman
-
       - name: Update JAR to use release version for container build
         run: |
-          # Rename the JAR file to use the release version (without SNAPSHOT)
           OLD_JAR=$(find target -name "*.jar" -not -name "*-sources.jar" -not -name "*-javadoc.jar" | head -1)
           if [[ -f "$OLD_JAR" ]]; then
-            NEW_JAR="target/helloworlddb-${{ steps.version.outputs.release_version }}.jar"
+            NEW_JAR="target/${{ needs.build.outputs.artifact-id }}-${{ needs.build.outputs.release-version }}.jar"
             echo "Renaming JAR: $OLD_JAR -> $NEW_JAR"
             mv "$OLD_JAR" "$NEW_JAR"
             echo "✅ JAR renamed to match release version"
@@ -158,47 +173,43 @@ jobs:
             exit 1
           fi
 
+      - name: Set up Podman
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y podman
+
       - name: Build container image
         id: build
         run: |
-          echo "🏗️ Building container image with release version ${{ steps.version.outputs.release_version }}..."
-          
-          # Build with podman using release version
+          echo "🏗️ Building container image with release version ${{ needs.build.outputs.release-version }}..."
           podman build -t local-build .
-          
           echo "Container image built successfully"
 
       - name: Tag images for release
         env:
           REGISTRY: ${{ env.REGISTRY }}
-          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+          IMAGE_NAME: ${{ needs.build.outputs.artifact-id }}
         run: |
           echo "🏷️ Tagging images for release..."
           echo "Registry: $REGISTRY"
           echo "Image name: $IMAGE_NAME"
-          echo "Release Version: ${{ steps.version.outputs.release_version }}"
+          echo "Release Version: ${{ needs.build.outputs.release-version }}"
           
-          # Clean and validate registry URL
           if [ -n "$REGISTRY" ] && [ "$REGISTRY" != "" ]; then
-            # Remove protocol prefixes if present
             CLEAN_REGISTRY=$(echo "$REGISTRY" | sed 's|^https\?://||' | sed 's|/$||')
             echo "Cleaned registry: $CLEAN_REGISTRY"
           
-            # Validate registry format
             if [[ "$CLEAN_REGISTRY" =~ ^[a-zA-Z0-9.-]+:[0-9]+$ ]] || [[ "$CLEAN_REGISTRY" =~ ^[a-zA-Z0-9.-]+$ ]]; then
               echo "Tagging with registry: $CLEAN_REGISTRY"
-              # Use release version (no SNAPSHOT) for container tags
-              podman tag local-build $CLEAN_REGISTRY/$IMAGE_NAME:${{ steps.version.outputs.release_version }}
+              podman tag local-build $CLEAN_REGISTRY/$IMAGE_NAME:${{ needs.build.outputs.release-version }}
               podman tag local-build $CLEAN_REGISTRY/$IMAGE_NAME:latest
             else
               echo "❌ Invalid registry format: $CLEAN_REGISTRY"
-              echo "Expected format: hostname:port or hostname"
               exit 1
             fi
           else
             echo "No registry configured, using local tags"
-            # Use release version (no SNAPSHOT) for container tags
-            podman tag local-build $IMAGE_NAME:${{ steps.version.outputs.release_version }}
+            podman tag local-build $IMAGE_NAME:${{ needs.build.outputs.release-version }}
             podman tag local-build $IMAGE_NAME:latest
           fi
           
@@ -206,45 +217,41 @@ jobs:
           podman images | grep $IMAGE_NAME
 
       - name: Login to Nexus Docker Registry
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           echo "🔐 Logging into Nexus Docker registry..."
-          
-          # Clean registry URL for login
           CLEAN_REGISTRY=$(echo "${{ env.REGISTRY }}" | sed 's|^https\?://||' | sed 's|/$||')
           echo "Login registry: $CLEAN_REGISTRY"
-          
           echo "${{ secrets.NEXUS_PASSWORD }}" | podman login \
             --username "${{ secrets.NEXUS_USERNAME }}" \
             --password-stdin \
             $CLEAN_REGISTRY
 
       - name: Push container images
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           echo "🚀 Pushing container images..."
           
+          IMAGE_NAME="${{ needs.build.outputs.artifact-id }}"
+          
           if [ -n "${{ env.REGISTRY }}" ]; then
-            # Clean registry URL for pushing
             CLEAN_REGISTRY=$(echo "${{ env.REGISTRY }}" | sed 's|^https\?://||' | sed 's|/$||')
             echo "Push registry: $CLEAN_REGISTRY"
           
-            # Push with release version (no SNAPSHOT)
-            podman push $CLEAN_REGISTRY/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.release_version }}
-            podman push $CLEAN_REGISTRY/${{ env.IMAGE_NAME }}:latest
+            podman push $CLEAN_REGISTRY/$IMAGE_NAME:${{ needs.build.outputs.release-version }}
+            podman push $CLEAN_REGISTRY/$IMAGE_NAME:latest
           
             echo "✅ Images pushed successfully:"
-            echo "  - $CLEAN_REGISTRY/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.release_version }}"
-            echo "  - $CLEAN_REGISTRY/${{ env.IMAGE_NAME }}:latest"
+            echo "  - $CLEAN_REGISTRY/$IMAGE_NAME:${{ needs.build.outputs.release-version }}"
+            echo "  - $CLEAN_REGISTRY/$IMAGE_NAME:latest"
           else
             echo "⚠️ No registry configured, skipping push"
           fi
 
-  deploy-to-nexus:
+  push-into-repository:
     runs-on: ubuntu-latest
     needs: build
-    # Only deploy to Nexus on merge to main/master (not on PRs)
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     steps:
       - name: Checkout code
@@ -253,18 +260,10 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
-      - name: Extract Java version from pom.xml
-        id: java-version
-        run: |
-          # Extract Java version from pom.xml properties
-          JAVA_VERSION=$(grep -A 5 '<properties>' pom.xml | grep '<java.version>' | sed 's/.*<java.version>\(.*\)<\/java.version>.*/\1/' | xargs)
-          echo "Extracted Java version: $JAVA_VERSION"
-          echo "java-version=$JAVA_VERSION" >> $GITHUB_OUTPUT
-
-      - name: Set up JDK ${{ steps.java-version.outputs.java-version }}
+      - name: Set up JDK ${{ needs.build.outputs.java-version }}
         uses: actions/setup-java@v4
         with:
-          java-version: ${{ steps.java-version.outputs.java-version }}
+          java-version: ${{ needs.build.outputs.java-version }}
           distribution: 'temurin'
 
       - name: Cache Maven dependencies
@@ -283,7 +282,6 @@ jobs:
       - name: Configure Maven settings for Nexus
         run: |
           mkdir -p ~/.m2
-          
           cat > ~/.m2/settings.xml << EOF
           <?xml version="1.0" encoding="UTF-8"?>
           <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
@@ -299,106 +297,23 @@ jobs:
             </servers>
           </settings>
           EOF
-          
           echo "✅ Maven settings.xml configured successfully"
-
-      - name: Extract current version
-        id: version
-        run: |
-          # Make Maven wrapper executable
-          chmod +x ./mvnw
-          
-          # Try multiple methods to extract version
-          echo "Attempting to extract project information from pom.xml..."
-          
-          # Method 1: Try Maven wrapper for all project info
-          if CURRENT_VERSION=$(./mvnw help:evaluate -Dexpression=project.version -q -DforceStdout 2>/dev/null) && \
-             GROUP_ID=$(./mvnw help:evaluate -Dexpression=project.groupId -q -DforceStdout 2>/dev/null) && \
-             ARTIFACT_ID=$(./mvnw help:evaluate -Dexpression=project.artifactId -q -DforceStdout 2>/dev/null); then
-            echo "✅ Project info extracted using Maven wrapper:"
-            echo "  GroupId: $GROUP_ID"
-            echo "  ArtifactId: $ARTIFACT_ID" 
-            echo "  Version: $CURRENT_VERSION"
-          else
-            echo "⚠️ Maven wrapper failed, trying alternative methods..."
-          
-            # Method 2: Parse pom.xml directly - extract project version specifically
-            CURRENT_VERSION=$(grep -A 10 '<artifactId>helloworlddb</artifactId>' pom.xml | grep '<version>' | head -1 | sed 's/.*<version>\(.*\)<\/version>.*/\1/' | xargs)
-            GROUP_ID=$(grep -A 5 '<artifactId>helloworlddb</artifactId>' pom.xml | grep -B 5 '<version>' | grep '<groupId>' | sed 's/.*<groupId>\(.*\)<\/groupId>.*/\1/' | xargs)
-            ARTIFACT_ID=$(grep '<artifactId>helloworlddb</artifactId>' pom.xml | sed 's/.*<artifactId>\(.*\)<\/artifactId>.*/\1/' | xargs)
-            echo "✅ Project info extracted from pom.xml:"
-            echo "  GroupId: $GROUP_ID"
-            echo "  ArtifactId: $ARTIFACT_ID"
-            echo "  Version: $CURRENT_VERSION"
-          fi
-          
-          # Validate extracted values
-          if [[ -z "$GROUP_ID" || -z "$ARTIFACT_ID" ]]; then
-            echo "❌ Failed to extract groupId or artifactId"
-            exit 1
-          fi
-          
-          # Validate version format
-          if [[ ! "$CURRENT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-SNAPSHOT)?$ ]]; then
-            echo "❌ Invalid version format: $CURRENT_VERSION"
-            echo "Setting default version: 0.0.1-SNAPSHOT"
-            CURRENT_VERSION="0.0.1-SNAPSHOT"
-          fi
-          
-          # Set outputs
-          echo "group_id=$GROUP_ID" >> $GITHUB_OUTPUT
-          echo "artifact_id=$ARTIFACT_ID" >> $GITHUB_OUTPUT
-          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
-          
-          # Remove -SNAPSHOT suffix and extract version parts
-          BASE_VERSION=$(echo $CURRENT_VERSION | sed 's/-SNAPSHOT//')
-          echo "base_version=$BASE_VERSION" >> $GITHUB_OUTPUT
-          
-          # Extract major, minor, patch
-          MAJOR=$(echo $BASE_VERSION | cut -d. -f1)
-          MINOR=$(echo $BASE_VERSION | cut -d. -f2)
-          PATCH=$(echo $BASE_VERSION | cut -d. -f3)
-          
-          # Increment patch version
-          NEW_PATCH=$((PATCH + 1))
-          RELEASE_VERSION="$MAJOR.$MINOR.$NEW_PATCH"
-          NEXT_SNAPSHOT_VERSION="$MAJOR.$MINOR.$((NEW_PATCH + 1))-SNAPSHOT"
-          
-          echo "release_version=$RELEASE_VERSION" >> $GITHUB_OUTPUT
-          echo "next_snapshot_version=$NEXT_SNAPSHOT_VERSION" >> $GITHUB_OUTPUT
-          
-          echo "📋 Project Summary:"
-          echo "  GroupId: $GROUP_ID"
-          echo "  ArtifactId: $ARTIFACT_ID"
-          echo "  Current version: $CURRENT_VERSION"
-          echo "  Release version: $RELEASE_VERSION"
-          echo "  Next snapshot version: $NEXT_SNAPSHOT_VERSION"
-
-      - name: Set release version
-        run: |
-          ./mvnw versions:set -DnewVersion=${{ steps.version.outputs.release_version }} -DgenerateBackupPoms=false
-          echo "Set version to: ${{ steps.version.outputs.release_version }}"
 
       - name: Deploy release to Nexus
         run: |
-          echo "🚀 Deploying to Nexus repository..."
-          echo "Project: ${{ steps.version.outputs.group_id }}:${{ steps.version.outputs.artifact_id }}:${{ steps.version.outputs.release_version }}"
+          chmod +x ./mvnw
+          echo "🚀 Pushing to Nexus repository..."
+          echo "Project: ${{ needs.build.outputs.group-id }}:${{ needs.build.outputs.artifact-id }}:${{ needs.build.outputs.release-version }}"
           
-          # Determine repository URL based on version type
-          if [[ "${{ steps.version.outputs.release_version }}" == *"-SNAPSHOT" ]]; then
-            REPO_URL="${{ secrets.NEXUS_URL }}/repository/maven-snapshots/"
-            echo "📦 Deploying SNAPSHOT to: $REPO_URL"
-          else
-            REPO_URL="${{ secrets.NEXUS_URL }}/repository/maven-releases/"
-            echo "📦 Deploying RELEASE to: $REPO_URL"
-          fi
+          # Deploy as release version (not SNAPSHOT)
+          REPO_URL="${{ secrets.NEXUS_URL }}/repository/maven-releases/"
+          echo "📦 Pushing RELEASE to: $REPO_URL"
           
-          # Find the actual JAR file that was built
-          JAR_FILE=$(find target -name "${{ steps.version.outputs.artifact_id }}-*.jar" -not -name "*-sources.jar" -not -name "*-javadoc.jar" | head -1)
+          JAR_FILE=$(find target -name "${{ needs.build.outputs.artifact-id }}-*.jar" -not -name "*-sources.jar" -not -name "*-javadoc.jar" | head -1)
           
           if [[ ! -f "$JAR_FILE" ]]; then
             echo "❌ JAR file not found in target directory"
-            echo "Looking for: target/${{ steps.version.outputs.artifact_id }}-*.jar"
+            echo "Looking for: target/${{ needs.build.outputs.artifact-id }}-*.jar"
             echo "Files in target directory:"
             ls -la target/
             exit 1
@@ -406,11 +321,10 @@ jobs:
           
           echo "📦 Found JAR file: $JAR_FILE"
           
-          # Deploy using Maven deploy plugin with the actual built JAR
           ./mvnw deploy:deploy-file \
-            -DgroupId=${{ steps.version.outputs.group_id }} \
-            -DartifactId=${{ steps.version.outputs.artifact_id }} \
-            -Dversion=${{ steps.version.outputs.release_version }} \
+            -DgroupId=${{ needs.build.outputs.group-id }} \
+            -DartifactId=${{ needs.build.outputs.artifact-id }} \
+            -Dversion=${{ needs.build.outputs.release-version }} \
             -Dpackaging=jar \
             -Dfile="$JAR_FILE" \
             -DrepositoryId=adeutschmanndev-nexus \
@@ -418,24 +332,14 @@ jobs:
             -DgeneratePom=false \
             -DpomFile=pom.xml
           
-          echo "✅ Successfully deployed ${{ steps.version.outputs.group_id }}:${{ steps.version.outputs.artifact_id }}:${{ steps.version.outputs.release_version }} to: $REPO_URL"
+          echo "✅ Successfully deployed ${{ needs.build.outputs.group-id }}:${{ needs.build.outputs.artifact-id }}:${{ needs.build.outputs.release-version }} to: $REPO_URL"
 
       - name: Create Git tag for release
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git tag -a "v${{ steps.version.outputs.release_version }}" -m "Release version ${{ steps.version.outputs.release_version }}"
-          git push origin "v${{ steps.version.outputs.release_version }}"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Update to next snapshot version
-        run: |
-          git checkout ${{ github.ref_name }}
-          ./mvnw versions:set -DnewVersion=${{ steps.version.outputs.next_snapshot_version }} -DgenerateBackupPoms=false
-          git add pom.xml
-          git commit -m "chore: bump version to ${{ steps.version.outputs.next_snapshot_version }}"
-          git push origin ${{ github.ref_name }}
+          git tag -a "v${{ needs.build.outputs.release-version }}" -m "Release version ${{ needs.build.outputs.release-version }}"
+          git push origin "v${{ needs.build.outputs.release-version }}"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -446,22 +350,23 @@ jobs:
           echo "- **Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Triggered by**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Released Version**: ${{ steps.version.outputs.release_version }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Next Development Version**: ${{ steps.version.outputs.next_snapshot_version }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Java Version**: ${{ steps.java-version.outputs.java-version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **POM Version**: ${{ needs.build.outputs.current-version }} (unchanged)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Released Version**: ${{ needs.build.outputs.release-version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Java Version**: ${{ needs.build.outputs.java-version }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Maven Build**: $(if [ ${{ job.status }} == 'success' ]; then echo '✅ Success'; else echo '❌ Failed'; fi)" >> $GITHUB_STEP_SUMMARY
           echo "- **Nexus Deploy**: $(if [ ${{ job.status }} == 'success' ]; then echo '✅ Deployed'; else echo '❌ Failed'; fi)" >> $GITHUB_STEP_SUMMARY
-          echo "- **Git Tag**: v${{ steps.version.outputs.release_version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Git Tag**: v${{ needs.build.outputs.release-version }}" >> $GITHUB_STEP_SUMMARY
+
   update-dev-overlay:
     runs-on: ubuntu-latest
-    needs: build-container        # ← your job that pushed the image
+    needs: build-container
     if: needs.build-container.result == 'success'
     steps:
       - name: Checkout config repo
         uses: actions/checkout@v4
         with:
           repository: adeutschmann-dev/spring-boot-hello-world-gitops
-          token: ${{ secrets.CONFIG_REPO_TOKEN }}   # PAT with repo write perms
+          token: ${{ secrets.CONFIG_REPO_TOKEN }}
           ref: main
           path: config-repo
 
@@ -470,11 +375,12 @@ jobs:
 
       - name: Update image tag in dev overlay
         env:
-          TAG: ${{ needs.build-container.outputs.image-version || needs.build-container.outputs.tag || steps.version.outputs.release_version }}
+          TAG: ${{ needs.build-container.outputs.image-version }}
+          IMAGE_NAME: ${{ needs.build.outputs.artifact-id }}
         run: |
           cd config-repo/environments/dev/hello-world-db
           yq -i '
-            (.images[] | select(.name == "registry-nexus.apps.ocp4.adeutschmann.dev/spring-boot-helloworld-db")).newTag = env(TAG)
+            (.images[] | select(.name == "registry-nexus.apps.ocp4.adeutschmann.dev/" + env(IMAGE_NAME))).newTag = env(TAG)
           ' kustomization.yaml
 
       - name: Commit & push
@@ -483,19 +389,20 @@ jobs:
           git config user.name "ci-bot"
           git config user.email "ci@example.com"
           git add environments/dev/hello-world-db/kustomization.yaml
-          git commit -m "Deploy dev: spring-boot-helloworld:${{ needs.build-container.outputs.image-version || needs.build-container.outputs.tag || steps.version.outputs.release_version }}"
+          git commit -m "Deploy dev: ${{ needs.build.outputs.artifact-id }}:${{ needs.build-container.outputs.image-version }}"
           git push
+
   build-and-deploy-migrations:
     runs-on: ubuntu-latest
-    needs: update-dev-overlay        # ← your job that pushed the image
+    needs: update-dev-overlay
     if: needs.build-container.result == 'success'
     env:
       IMAGE_NAME: helloworld-db-migrations
-      # ---- config repo settings (where kustomization.yaml lives) ----
       CONFIG_REPO: adeutschmann-dev/spring-boot-hello-world-gitops
       CONFIG_REPO_BRANCH: main
       CONFIG_REPO_PATH: environments/dev/hello-world-db
       FLYWAY_JOB_FILE: kustomization.yaml
+
     steps:
       - name: Checkout migrations repo
         uses: actions/checkout@v4
@@ -503,12 +410,10 @@ jobs:
       - name: Compute TAG
         id: version
         run: |
-          # Prefer a tag; else YYYYmmdd-HHMMSS-<shortsha>
           if [ -n "${GITHUB_REF_NAME##refs/tags/*}" ]; then
             TS=$(date -u +%Y%m%d-%H%M%S)
             echo "tag=${TS}-${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
           else
-            # when pushing an actual Git tag
             echo "tag=${GITHUB_REF_NAME##refs/tags/}" >> $GITHUB_OUTPUT
           fi
 
@@ -527,7 +432,6 @@ jobs:
         with:
           context: .
           file: Dockerfile.flyway
-          # Expect a Dockerfile that copies ./sql into the image (see assumption above)
           push: true
           tags: |
             ${{ secrets.NEXUS_DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}
@@ -550,7 +454,7 @@ jobs:
         env:
           FILE: config-repo/environments/dev/hello-world-db/kustomization.yaml
           IMAGE_BASE: registry-nexus.apps.ocp4.adeutschmann.dev/helloworld-db-migrations
-          TAG: ${{ steps.version.outputs.tag }}   # or however you compute TAG
+          TAG: ${{ steps.version.outputs.tag }}
         run: |
           echo "Updating $IMAGE_BASE to tag $TAG in $FILE"
           yq -i '
@@ -569,3 +473,4 @@ jobs:
           fi
           git commit -m "migrations: ${REGISTRY}/${IMAGE_NAME}:${{ steps.version.outputs.tag }}"
           git push
+
